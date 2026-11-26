@@ -655,8 +655,23 @@ class TplinkC80Router(AbstractRouter):
             response = self._session.post(url, data=data, timeout=self.timeout, verify=self._session.verify)
             # Raises exception for 4XX/5XX status codes for all requests except 1st in authorize
             if not (code == 2 and asyn == 1 and use_token is False and data is None):
+                if response.status_code >= 400 and code in (2, 7, 16):
+                    # Capture the router's short error response for authentication
+                    # diagnostics, without logging the session token in the URL.
+                    self._logger.error(
+                        "Router request rejected: code=%s asyn=%s status=%s response=%r",
+                        code, asyn, response.status_code, response.text[:200],
+                    )
                 response.raise_for_status()
             return response
         except requests.exceptions.RequestException as e:
-            self._logger.error(f"Network error: {e}")
-            raise ClientException(f"Network error: {str(e)}") from e
+            # requests' exception string includes the full URL, including the
+            # router session token in the id query parameter. Never log that URL.
+            status = e.response.status_code if e.response is not None else "connection error"
+            self._logger.error(
+                "Network error: router request code=%s asyn=%s status=%s",
+                code, asyn, status,
+            )
+            raise ClientException(
+                f"Network error: router request code={code}&asyn={asyn}, status={status}"
+            ) from e
