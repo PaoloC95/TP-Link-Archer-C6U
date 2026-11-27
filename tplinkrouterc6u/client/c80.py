@@ -157,8 +157,9 @@ class TplinkC80Router(AbstractRouter):
 
         # Register AES string for decryption on server side
         self.request(16, 0, True, data=f'set {aes_string_encrypted}')
-        # Some auth request, might be redundant
-        response = self.request(7, 0, True)
+        # The MR515 rejects this optional legacy auth request with HTTP 401.
+        # Skip it so the subsequent authenticated firmware request can verify
+        # whether the AES session established above is already usable.
 
     def logout(self) -> None:
         self.request(11, 0, True)
