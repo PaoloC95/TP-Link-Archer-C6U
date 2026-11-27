@@ -603,12 +603,34 @@ class TplinkC80Router(AbstractRouter):
         # WR844N (#59): encrypted data body is rejected with error code 6.
         return isinstance(text, str) and text.startswith('00006')
 
-    def _post_data(self, text: str, code: int = 2, asyn: int = 1) -> str:
-        """Send a data request; fall back to plaintext if encryption is rejected."""
+    def _post_data(
+        self,
+        text: str,
+        code: int = 2,
+        asyn: int = 1,
+        diagnose_plain_fallback: bool = False,
+    ) -> str:
+        """Send a data request, optionally testing plaintext after an MR515 read fails."""
         if self._plain_data:
             response = self.request(code, asyn, True, data=text)
         else:
-            response = self.request(code, asyn, True, data=self._encrypt_body(text))
+            try:
+                response = self.request(code, asyn, True, data=self._encrypt_body(text))
+            except ClientException as err:
+                if not (
+                    diagnose_plain_fallback
+                    and self.__class__.__name__ == 'TplinkMR515Router'
+                ):
+                    raise
+                self._logger.warning(
+                    "MR515 encrypted read rejected; retrying the same read without encryption: %s",
+                    err,
+                )
+                response = self.request(code, asyn, True, data=text)
+                self._logger.info(
+                    "MR515 plaintext diagnostic retry succeeded: status=%s",
+                    response.status_code,
+                )
             if self._is_reject_encrypted(response.text):
                 self._plain_data = True
                 response = self.request(code, asyn, True, data=text)
@@ -623,8 +645,12 @@ class TplinkC80Router(AbstractRouter):
             return None
         return wan_status == '1'
 
-    def _return_data_block(self, request_text: str) -> dict[str, str]:
-        response_text = self._post_data(request_text)
+    def _return_data_block(
+        self, request_text: str, diagnose_plain_fallback: bool = False
+    ) -> dict[str, str]:
+        response_text = self._post_data(
+            request_text, diagnose_plain_fallback=diagnose_plain_fallback
+        )
         matches = TplinkC80Router.DATA_REGEX.findall(response_text)
         return {match[0]: match[1].strip().split("\r\n") for match in matches}
 
@@ -685,7 +711,9 @@ class TplinkC80Router(AbstractRouter):
             'cell': '151|1,0,0',
             'mobile': '153|1,0,0',
         }
-        data_blocks = self._return_data_block('#'.join(requests.values()))
+        data_blocks = self._return_data_block(
+            '#'.join(requests.values()), diagnose_plain_fallback=True
+        )
 
         def block(name: str) -> dict[str, str]:
             return self._parse_last_values_from_block(data_blocks.get(requests[name], []))
@@ -764,7 +792,7 @@ class TplinkC80Router(AbstractRouter):
                 elif code == 7:
                     stage = 'optional_auth'
                 elif use_token and data is not None:
-                    stage = 'encrypted_data_request'
+                    stage = 'encrypted_data_request' if data.startswith('sign=') else 'plain_data_request'
                 elif not use_token and data is None:
                     stage = 'token_request'
                 else:
