@@ -142,6 +142,10 @@ class TplinkC80Router(AbstractRouter):
 
         # Get RSA exponent, modulus and sequence number
         response = self.request(16, 0, data='get')
+        self._logger.info(
+            "MR515 auth diagnostic: code=16 get accepted status=%s response_length=%s line_count=%s",
+            response.status_code, len(response.text), len(response.text.splitlines()),
+        )
 
         responseText = response.text.splitlines()
         if len(responseText) < 4:
@@ -156,7 +160,11 @@ class TplinkC80Router(AbstractRouter):
                                                              self._encryption.ee_rsa)
 
         # Register AES string for decryption on server side
-        self.request(16, 0, True, data=f'set {aes_string_encrypted}')
+        response = self.request(16, 0, True, data=f'set {aes_string_encrypted}')
+        self._logger.info(
+            "MR515 auth diagnostic: code=16 set accepted status=%s response_length=%s",
+            response.status_code, len(response.text),
+        )
         # The MR515 rejects this optional legacy auth request with HTTP 401.
         # Skip it so the subsequent authenticated firmware request can verify
         # whether the AES session established above is already usable.
