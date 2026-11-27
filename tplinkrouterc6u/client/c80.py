@@ -158,8 +158,12 @@ class TplinkC80Router(AbstractRouter):
 
         # Register AES string for decryption on server side
         self.request(16, 0, True, data=f'set {aes_string_encrypted}')
-        # Some auth request, might be redundant
-        response = self.request(7, 0, True)
+        # Optional auth request: some firmware revisions reject it even after
+        # the AES session has been registered. Do not abort setup on this response.
+        try:
+            self.request(7, 0, True)
+        except ClientException as err:
+            self._logger.warning("MR515 optional auth request rejected; continuing: %s", err)
 
     def logout(self) -> None:
         self.request(11, 0, True)
