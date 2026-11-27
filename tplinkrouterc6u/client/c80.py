@@ -783,10 +783,21 @@ class TplinkMR515Router(TplinkC80Router):
         """Match the MR515 by its LTE data-statistics block (block 139)."""
         try:
             response = self.request(2, 1, data='139|1,0,0')
-            return (
+            supported = (
                 response.status_code == 200
                 and response.text.startswith('00000')
                 and 'id 139|1,0,0' in response.text
             )
-        except Exception:
+            if self._logger is not None:
+                self._logger.info(
+                    "MR515 detection probe: status=%s, success_marker=%s, lte_block_present=%s, supported=%s",
+                    response.status_code,
+                    response.text.startswith('00000'),
+                    'id 139|1,0,0' in response.text,
+                    supported,
+                )
+            return supported
+        except Exception as err:
+            if self._logger is not None:
+                self._logger.warning("MR515 detection probe failed: %s", err)
             return False
