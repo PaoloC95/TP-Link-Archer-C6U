@@ -143,10 +143,6 @@ class TplinkC80Router(AbstractRouter):
 
         # Get RSA exponent, modulus and sequence number
         response = self.request(16, 0, data='get')
-        self._logger.info(
-            "MR515 auth diagnostic: code=16 get accepted status=%s response_length=%s line_count=%s",
-            response.status_code, len(response.text), len(response.text.splitlines()),
-        )
 
         responseText = response.text.splitlines()
         if len(responseText) < 4:
@@ -161,14 +157,9 @@ class TplinkC80Router(AbstractRouter):
                                                              self._encryption.ee_rsa)
 
         # Register AES string for decryption on server side
-        response = self.request(16, 0, True, data=f'set {aes_string_encrypted}')
-        self._logger.info(
-            "MR515 auth diagnostic: code=16 set accepted status=%s response_length=%s",
-            response.status_code, len(response.text),
-        )
-        # The MR515 rejects this optional legacy auth request with HTTP 401.
-        # Skip it so the subsequent authenticated firmware request can verify
-        # whether the AES session established above is already usable.
+        self.request(16, 0, True, data=f'set {aes_string_encrypted}')
+        # Some auth request, might be redundant
+        response = self.request(7, 0, True)
 
     def logout(self) -> None:
         self.request(11, 0, True)
@@ -632,16 +623,6 @@ class TplinkC80Router(AbstractRouter):
         response_text = self._post_data(request_text)
         matches = TplinkC80Router.DATA_REGEX.findall(response_text)
         return {match[0]: match[1].strip().split("\r\n") for match in matches}
-
-    def _parse_last_values_from_block(self, lines: list[str]) -> dict[str, str]:
-        values: dict[str, str] = {}
-        for line in lines:
-            if line == '00000' or line.startswith('id '):
-                continue
-            key, _, value = line.rpartition(' ')
-            if key:
-                values[key] = value.strip()
-        return values
 
     def _parse_last_values_from_block(self, lines: list[str]) -> dict[str, str]:
         values: dict[str, str] = {}
