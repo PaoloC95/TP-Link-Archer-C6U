@@ -780,20 +780,22 @@ class TplinkMR515Router(TplinkC80Router):
     """TP-Link Archer MR515 4G/LTE router."""
 
     def supports(self) -> bool:
-        """Match the MR515 by its LTE data-statistics block (block 139)."""
+        """Identify MR515 from the model name in the standard C80 device-info block."""
         try:
-            response = self.request(2, 1, data='139|1,0,0')
+            response = self.request(2, 1, data='0|1,0,0')
+            model_match = re.search(r'(?:^|\\r\\n)modelName\\s+([^\\r\\n]+)', response.text)
+            model_name = parse.unquote(model_match.group(1)).strip().lower() if model_match else ''
             supported = (
                 response.status_code == 200
                 and response.text.startswith('00000')
-                and 'id 139|1,0,0' in response.text
+                and model_name in ('archer mr515', 'mr515')
             )
             if self._logger is not None:
                 self._logger.info(
-                    "MR515 detection probe: status=%s, success_marker=%s, lte_block_present=%s, supported=%s",
+                    "MR515 detection probe: status=%s, success_marker=%s, model_name_match=%s, supported=%s",
                     response.status_code,
                     response.text.startswith('00000'),
-                    'id 139|1,0,0' in response.text,
+                    model_name in ('archer mr515', 'mr515'),
                     supported,
                 )
             return supported
