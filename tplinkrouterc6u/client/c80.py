@@ -783,7 +783,7 @@ class TplinkMR515Router(TplinkC80Router):
         """Identify MR515 from the model name in the standard C80 device-info block."""
         try:
             response = self.request(2, 1, data='0|1,0,0')
-            model_match = re.search(r'(?:^|\\r\\n)modelName\\s+([^\\r\\n]+)', response.text)
+            model_match = re.search(r'modelName\s+([^\r\n]+)', response.text)
             model_name = parse.unquote(model_match.group(1)).strip().lower() if model_match else ''
             supported = (
                 response.status_code == 200
