@@ -620,6 +620,7 @@ class TplinkC80Router(AbstractRouter):
                 if not (
                     diagnose_plain_fallback
                     and self.__class__.__name__ == 'TplinkMR515Router'
+                    and ('status=401' in str(err) or 'status=403' in str(err))
                 ):
                     raise
                 self._logger.warning(
@@ -821,7 +822,7 @@ class TplinkC80Router(AbstractRouter):
                 elif code == 7:
                     stage = 'optional_auth'
                 elif use_token and data is not None:
-                    stage = 'encrypted_data_request'
+                    stage = 'encrypted_data_request' if data.startswith('sign=') else 'plain_data_request'
                 elif not use_token and data is None:
                     stage = 'token_request'
                 else:
