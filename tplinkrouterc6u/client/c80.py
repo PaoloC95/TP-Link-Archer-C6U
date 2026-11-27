@@ -752,11 +752,27 @@ class TplinkC80Router(AbstractRouter):
             url += f"&id={self._encryption.token}"
         try:
             response = self._session.post(url, data=data, timeout=self.timeout, verify=self._session.verify)
+            # Trace MR515 authentication requests without logging URLs, tokens,
+            # encrypted payloads, passwords, or response bodies.
+            if self.__class__.__name__ == 'TplinkMR515Router' and code in (2, 7, 16):
+                if code == 16:
+                    stage = 'rsa_get' if data == 'get' else 'rsa_set'
+                elif code == 7:
+                    stage = 'optional_auth'
+                elif use_token and data is not None:
+                    stage = 'encrypted_data_request'
+                elif not use_token and data is None:
+                    stage = 'token_request'
+                else:
+                    stage = 'device_info_probe'
+                if self._logger is not None:
+                    self._logger.info(
+                        "MR515 auth trace: stage=%s code=%s asyn=%s use_token=%s status=%s response_len=%s",
+                        stage, code, asyn, use_token, response.status_code, len(response.text or ''),
+                    )
             # Raises exception for 4XX/5XX status codes for all requests except 1st in authorize
             if not (code == 2 and asyn == 1 and use_token is False and data is None):
                 if response.status_code >= 400 and code in (2, 7, 16):
-                    # Capture the router's short error response for authentication
-                    # diagnostics, without logging the session token in the URL.
                     self._logger.error(
                         "Router request rejected: code=%s asyn=%s status=%s response=%r",
                         code, asyn, response.status_code, response.text[:200],
@@ -767,6 +783,21 @@ class TplinkC80Router(AbstractRouter):
             # requests' exception string includes the full URL, including the
             # router session token in the id query parameter. Never log that URL.
             status = e.response.status_code if e.response is not None else "connection error"
+            if self.__class__.__name__ == 'TplinkMR515Router' and code in (2, 7, 16) and self._logger is not None:
+                if code == 16:
+                    stage = 'rsa_get' if data == 'get' else 'rsa_set'
+                elif code == 7:
+                    stage = 'optional_auth'
+                elif use_token and data is not None:
+                    stage = 'encrypted_data_request'
+                elif not use_token and data is None:
+                    stage = 'token_request'
+                else:
+                    stage = 'device_info_probe'
+                self._logger.error(
+                    "MR515 auth trace failed: stage=%s code=%s asyn=%s use_token=%s status=%s",
+                    stage, code, asyn, use_token, status,
+                )
             self._logger.error(
                 "Network error: router request code=%s asyn=%s status=%s",
                 code, asyn, status,
